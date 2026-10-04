@@ -1,232 +1,80 @@
-name: Release
+name: RandDB release
 
 on:
   push:
-    tags:
-      - "v*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to publish (e.g., 0.1.1) (must have tag v0.1.1)"
-        required: true
-        type: string
+    tags: ["v*"]
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
+
+env:
+  CARGO_BUILD_JOBS: 2
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build-and-publish:
-    name: Build and Publish
-    if: ${{ (github.event_name == 'workflow_dispatch' && !contains(github.event.inputs.version, '-')) || (github.event_name != 'workflow_dispatch' && !contains(github.ref_name, '-')) }}
-    runs-on: ubuntu-latest
-
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            binary: randdb
+          - os: macos-14
+            target: aarch64-apple-darwin
+            binary: randdb
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            binary: randdb.exe
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout Code (tag on dispatch)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: arduino/setup-protoc@v3
         with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/v{0}', github.event.inputs.version) || github.ref }}
-
-      - name: Resolve release version
-        id: rel
+          version: "36.2"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify tag
+        shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            INPUT="${{ github.event.inputs.version }}"
-            VER="${INPUT#v}"
-            echo "tag=v$VER" >> "$GITHUB_OUTPUT"
-            echo "ver=$VER" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-            echo "ver=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          registry-url: "https://registry.npmjs.org"
-          cache: "pnpm"
-      
-      - name: Upgrade npm for Trusted Publishing (OIDC)
-        run: |
-          npm i -g npm@^11.5.1
-          npm -v
-          node -v
-          pnpm -v
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm run build:release
-
-      - name: Verify tag matches package.json version
-        run: |
-          PKG="$(node -p "require('./package.json').version")"
-          if [ "${{ steps.rel.outputs.ver }}" != "$PKG" ]; then
-            echo "Version mismatch: tag v${{ steps.rel.outputs.ver }} != package.json $PKG"
-            exit 1
-          fi
-
-      - name: Check if version already exists on npm (dispatch only)
-        if: github.event_name == 'workflow_dispatch'
-        id: npmcheck
-        run: |
-          if npm view @chiway/contextweaver@${{ steps.rel.outputs.ver }} version >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish to NPM
-        if: github.event_name != 'workflow_dispatch' || steps.npmcheck.outputs.exists != 'true'
-        run: npm publish --no-git-checks --access public --provenance
-
-      - name: Collect changelog input
-        id: changelog_input
-        run: |
-          TAG="${{ steps.rel.outputs.tag }}"
-          PREV_TAG="$(git describe --tags --abbrev=0 "${TAG}^" --match "v*" 2>/dev/null || true)"
-
-          if [ -n "$PREV_TAG" ]; then
-            RANGE="$PREV_TAG..$TAG"
-          else
-            RANGE="$TAG"
-          fi
-
-          {
-            echo "# Changelog source"
-            echo
-            echo "Current tag: $TAG"
-            if [ -n "$PREV_TAG" ]; then
-              echo "Previous tag: $PREV_TAG"
-            fi
-            echo
-            echo "## Commits"
-            git log --no-merges --pretty=format:'- %s (%h)' "$RANGE"
-          } > changelog-source.md
-
-          echo "previous_tag=$PREV_TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Generate changelog with DeepSeek
-        id: ai_changelog
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "randdb") | .version')
+          test "$GITHUB_REF_NAME" = "v$VERSION"
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+      - name: Package
+        shell: bash
         env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          TARGET: ${{ matrix.target }}
+          BINARY: ${{ matrix.binary }}
         run: |
-          set -euo pipefail
-
-          if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
-            {
-              echo "## ContextWeaver ${{ steps.rel.outputs.tag }}"
-              echo
-              echo "### Changelog"
-              echo
-              cat changelog-source.md
-              echo
-              echo "### Installation"
-              echo
-              echo '```bash'
-              echo "npm install -g @chiway/contextweaver"
-              echo "# or"
-              echo "pnpm add -g @chiway/contextweaver"
-              echo '```'
-            } > release-body.md
-            exit 0
-          fi
-
-          node <<'NODE'
-          const fs = require('fs');
-          const source = fs.readFileSync('changelog-source.md', 'utf8');
-          const payload = {
-            model: 'deepseek-v4-flash',
-            messages: [
-              {
-                role: 'system',
-                content:
-                  'You are a release engineering assistant. Generate a concise and accurate English stable release changelog from the git commit list. Output Markdown only, with user-facing change highlights, upgrade notes, installation notes, and risk notes. Do not invent information that is not present in the input.',
-              },
-              {
-                role: 'user',
-                content: `Generate an English stable release changelog for ContextWeaver ${{ steps.rel.outputs.tag }}.\n\n${source}`,
-              },
-            ],
-            stream: false,
-          };
-          fs.writeFileSync('deepseek-request.json', JSON.stringify(payload));
-          NODE
-
-          if ! curl -sS -X POST "https://api.deepseek.com/chat/completions" \
-            -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d @deepseek-request.json \
-            -o deepseek-response.json; then
-            echo "DeepSeek request failed; falling back to raw changelog."
-            cp changelog-source.md ai-summary.md
-          elif ! node <<'NODE'
-          const fs = require('fs');
-          const response = JSON.parse(fs.readFileSync('deepseek-response.json', 'utf8'));
-          const content = response?.choices?.[0]?.message?.content;
-          if (!content) {
-            console.error(JSON.stringify(response, null, 2));
-            process.exit(1);
-          }
-          fs.writeFileSync('ai-summary.md', content.trim() + '\n');
-          NODE
-          then
-            echo "DeepSeek response did not contain a changelog; falling back to raw changelog."
-            cp changelog-source.md ai-summary.md
-          fi
-
-          {
-            echo "## ContextWeaver ${{ steps.rel.outputs.tag }}"
-            echo
-            cat ai-summary.md
-            echo
-            echo "### Installation"
-            echo
-            echo '```bash'
-            echo "npm install -g @chiway/contextweaver"
-            echo "# or"
-            echo "pnpm add -g @chiway/contextweaver"
-            echo '```'
-          } > release-body.md
-
-      - name: Upload changelog artifacts
-        uses: actions/upload-artifact@v4
+          mkdir -p dist
+          tar -czf "dist/randdb-${GITHUB_REF_NAME}-${TARGET}.tar.gz" -C target/release "$BINARY"
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.rel.outputs.tag }}-changelog
-          path: |
-            changelog-source.md
-            release-body.md
-            ai-summary.md
-          if-no-files-found: ignore
+          name: randdb-${{ matrix.target }}
+          path: dist/*.tar.gz
 
-      # push tag 和手动重跑都创建/更新 GitHub Release（手动重跑时显式指定 tag_name）
-      - name: Create GitHub Release
-        if: startsWith(steps.rel.outputs.tag, 'v')
-        uses: softprops/action-gh-release@v2
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          tag_name: ${{ steps.rel.outputs.tag }}
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-          body_path: release-body.md
-
-      # 发布到 MCP Registry
-      - name: Install mcp-publisher
+          pattern: randdb-*
+          merge-multiple: true
+          path: dist
+      - name: Publish archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
-          sudo mv mcp-publisher /usr/local/bin/
-          mcp-publisher --version
-
-      - name: Authenticate with MCP Registry
-        run: mcp-publisher login github-oidc
-
-      - name: Publish to MCP Registry
-        run: mcp-publisher publish
+          cd dist
+          sha256sum *.tar.gz >SHA256SUMS
+          FLAGS=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+              FLAGS+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "${FLAGS[@]}" ./*

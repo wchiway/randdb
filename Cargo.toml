@@ -1,0 +1,54 @@
+[package]
+name = "randdb"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.91"
+description = "Bounded local code indexing and semantic context retrieval for AI agents"
+license = "MIT"
+repository = "https://github.com/wchiway/contextweaver-mcp"
+readme = "README.md"
+
+[dependencies]
+anyhow = "1"
+arrow-array = "58"
+arrow-schema = "58"
+clap = { version = "4", features = ["derive", "env"] }
+dirs = "6"
+dotenvy = "0.15"
+encoding_rs = "0.8"
+fs2 = "0.4"
+futures = "0.3"
+ignore = "0.4"
+# 0.39's job error conversions require the remote feature even for local tables.
+# RandDB only opens local paths; remove this workaround once upstream fixes it.
+lancedb = { version = "0.39", default-features = false, features = ["remote"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+rmcp = { version = "3.5", default-features = false, features = ["server", "macros", "transport-io"] }
+rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "io-std", "io-util"] }
+tokio-util = "0.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tree-sitter = "0.27"
+tree-sitter-bash = "0.25"
+tree-sitter-c = "0.24"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-cpp = "0.23"
+tree-sitter-go = "0.25"
+tree-sitter-java = "0.23"
+tree-sitter-javascript = "0.25"
+tree-sitter-python = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-typescript = "0.23"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.dev]
+debug = 0
+
+[profile.release]
+strip = "debuginfo"
