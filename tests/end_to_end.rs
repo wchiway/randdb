@@ -21,6 +21,47 @@ fn request(root: &std::path::Path) -> SearchRequest {
     }
 }
 
+#[test]
+fn flat_cache_key_preserves_identity_and_leaves_room_for_windows_transaction_paths() {
+    let provider = Provider::start();
+    let home = std::path::Path::new("C:/Users/runneradmin/AppData/Local/Temp/.tmpABC123");
+    let root = std::path::Path::new("C:/projects/example");
+    let config = provider.config(home);
+    let dir = config.project_dir(root);
+    assert_eq!(dir.parent().unwrap(), home.join("indexes"));
+    let key = dir.file_name().unwrap().to_str().unwrap();
+    assert_eq!(key.len(), 64);
+    assert!(key.bytes().all(|b| b.is_ascii_hexdigit()));
+    assert_eq!(dir, config.project_dir(root));
+    assert_ne!(
+        dir,
+        config.project_dir(std::path::Path::new("C:/projects/other"))
+    );
+
+    let mut changed = config.clone();
+    changed.embedding.model = "another-model".into();
+    assert_ne!(dir, changed.project_dir(root));
+    changed = config.clone();
+    changed.embedding.url = "https://another.example/embeddings".parse().unwrap();
+    assert_ne!(dir, changed.project_dir(root));
+    changed = config.clone();
+    changed.dimensions += 1;
+    assert_ne!(dir, changed.project_dir(root));
+    changed = config.clone();
+    changed.embedding.key = "rotated-secret".into();
+    assert_eq!(dir, changed.project_dir(root));
+
+    let transaction =
+        dir.join("vectors/chunks.lance/_transactions/0-00000000-0000-0000-0000-000000000000.txn");
+    // The old nested hashes produced 266 characters for this ordinary TEMP path.
+    // Reserve some space below MAX_PATH for Lance's internal temporary files.
+    assert!(
+        transaction.to_string_lossy().encode_utf16().count() < 240,
+        "{}",
+        transaction.display()
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn index_search_update_delete_and_restart_use_real_stores() {
     let provider = Provider::start();

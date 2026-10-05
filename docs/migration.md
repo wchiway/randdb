@@ -22,4 +22,6 @@ RandDB does not open, convert, delete, or modify `~/.contextweaver`. Its UTF-8 b
 
 Rerun interrupted operations: pending writes and deletion tombstones are retried. `randdb index /path --force` deliberately recomputes embeddings. Changing embedding endpoint/model/dimensions selects a separate cache automatically. Neither operation modifies old ContextWeaver data.
 
+RandDB uses a single composite hash directory under `indexes/`. Indexes created by development builds with nested repository/configuration hash directories are not reused or deleted. The next indexing operation builds a new cache and can incur embedding costs; remove superseded caches manually only after validation.
+
 Product identity, executable, Cargo package, MCP server, and data directory are renamed. The checkout directory and GitHub repository URL remain unchanged until explicitly renamed by the owner; existing source links continue to work.

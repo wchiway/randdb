@@ -41,6 +41,8 @@ Extraction adds only bounded neighboring lines in the same file. The complete Ma
 
 The `.env` parser does not mutate process-global environment. Explicit environment variables override the file. Index directories are keyed by canonical repository path and an embedding/chunker fingerprint: endpoint, model, dimensions, and format version. Changing models with unchanged dimensions still selects a new index.
 
+The repository identity and configuration fingerprint are combined into one full SHA-256 directory name under `<home>/indexes/`. This avoids stacking two hash directories, leaving more path-length headroom for Lance transaction files on Windows. Use a short data-directory path on Windows when the chosen location would otherwise exceed filesystem API path limits.
+
 ## Build notes
 
 LanceDB 0.39 requires the `remote` feature to compile unconditional job-error conversions referencing `Error::Http`. This is an upstream build workaround; RandDB connects only to local paths. SQLite/Tree-sitter contain native code and LanceDB requires `protoc` at build time. Native binaries must be built and tested for each supported platform.

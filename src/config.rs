@@ -134,10 +134,17 @@ impl Config {
     }
 
     pub fn project_dir(&self, root: &Path) -> PathBuf {
-        self.home
-            .join("indexes")
-            .join(digest(root.as_os_str().as_encoded_bytes()))
-            .join(self.fingerprint())
+        // A single full SHA-256 key avoids stacking two 64-character directories.
+        // Lance's Windows rename path can otherwise exceed the legacy path limit.
+        let key = digest(
+            format!(
+                "{}\0{}",
+                digest(root.as_os_str().as_encoded_bytes()),
+                self.fingerprint()
+            )
+            .as_bytes(),
+        );
+        self.home.join("indexes").join(key)
     }
 }
 
