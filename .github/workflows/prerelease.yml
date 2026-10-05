@@ -1,14 +1,13 @@
-name: RandDB release
+name: RandDB pre-release
 
 on:
   push:
     tags:
-      - "v*"
-      - "!v*-*"
+      - "v*-*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing stable tag, for example v0.1.0"
+        description: "Existing prerelease tag, for example v0.2.0-rc.1"
         required: true
         type: string
 
@@ -20,12 +19,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  prerelease:
     permissions:
       contents: write
     uses: ./.github/workflows/publish.yml
     with:
       tag: ${{ inputs.tag || github.ref_name }}
-      prerelease: false
+      prerelease: true
     secrets:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}

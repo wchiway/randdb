@@ -104,6 +104,8 @@ Use `CARGO_BUILD_JOBS=2` on memory-constrained build hosts. Tests use temporary 
 
 `scan.rs` and `chunk.rs` handle ingestion; `store.rs` coordinates persistence; `api.rs` calls providers; `engine.rs` indexes and retrieves; `mcp.rs` and `main.rs` expose the tool and CLI.
 
+Maintainers: see the [release and pre-release workflow guide](docs/release.md) for tag conventions, DeepSeek-generated English notes, required secrets, and recovery steps.
+
 ## License
 
 MIT. RandDB succeeds ContextWeaver; Git history and existing license attribution are retained.
