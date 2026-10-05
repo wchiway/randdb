@@ -1,6 +1,6 @@
 # Migrating from ContextWeaver to RandDB
 
-RandDB is a Rust rewrite with a smaller interface. Its initial release uses version `0.1.0` under the new executable/package identity.
+RandDB is a Rust rewrite with a smaller interface. Its initial preview release uses version `0.1.0-alpha.1` under the new executable/package identity.
 
 1. Install or build `randdb`, then run `randdb init`.
 2. Copy your embedding/reranker settings into `~/.randdb/.env`. The seven provider variables retain their names. Old `CW_SEARCH_*` settings are unused. Keep credentials out of Git.
