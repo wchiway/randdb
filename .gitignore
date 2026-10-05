@@ -13,3 +13,4 @@ node_modules/
 .pnpm-store/
 *.tgz
 *.log
+__pycache__/

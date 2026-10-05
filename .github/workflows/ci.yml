@@ -17,6 +17,18 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  release-automation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python3 -m unittest discover -s .github/scripts/tests -v
+
   verify:
     strategy:
       fail-fast: false

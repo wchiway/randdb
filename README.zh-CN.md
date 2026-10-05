@@ -104,6 +104,8 @@ cargo build --release --locked
 
 `scan.rs` / `chunk.rs` 负责扫描和分块，`store.rs` 负责持久化，`api.rs` 调用服务，`engine.rs` 负责索引与检索，`mcp.rs` / `main.rs` 提供协议和命令行入口。
 
+维护者请参阅 [release / pre-release 工作流使用指南](docs/release.md)，了解标签约定、DeepSeek 英文摘要、必需 Secret 和失败恢复方法。
+
 ## 许可证
 
 MIT。RandDB 是 ContextWeaver 的 Rust 后继版本，保留原 Git 历史与许可证署名。
