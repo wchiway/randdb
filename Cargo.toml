@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.91"
 description = "Bounded local code indexing and semantic context retrieval for AI agents"
 license = "MIT"
-repository = "https://github.com/wchiway/contextweaver-mcp"
+repository = "https://github.com/wchiway/randdb"
 readme = "README.md"
 
 [dependencies]
