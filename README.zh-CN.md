@@ -8,6 +8,22 @@ RandDB 只提供一个 MCP 工具 `codebase-retrieval`：描述需要理解的�
 
 ## 安装
 
+发布工作流为 Linux x86_64、macOS arm64 和 Windows x86_64 构建程序。预编译程序的使用者无需安装 Node.js 或 Rust，但仍需满足目标操作系统的运行库要求。
+
+```sh
+# macOS、Linux 和 WSL
+curl -fsSL https://raw.githubusercontent.com/wchiway/randdb/main/install.sh | sh
+
+# Windows PowerShell
+irm https://raw.githubusercontent.com/wchiway/randdb/main/install.ps1 | iex
+```
+
+安装脚本会选择当前平台可用的最新版本，用发布资产中的 `SHA256SUMS` 校验下载内容，把可执行文件安装到 `~/.local/bin`（Windows 为 `%USERPROFILE%\.local\bin`），并创建配置模板。用 `--version v0.1.0-alpha.1` 指定版本，`--dir DIR` 指定安装目录，`--no-init` 跳过配置文件；PowerShell 脚本对应 `-Version`、`-InstallDir`、`-NoInit`。需要从镜像安装时设置 `RANDDB_RELEASE_BASE_URL` 和 `RANDDB_API_BASE_URL`。
+
+Linux 版本在 Ubuntu 24.04 上构建，较旧的发行版可能需要从源码构建。
+
+### 源码构建
+
 源码构建需要稳定版 Rust（至少 1.91）、C/C++ 编译工具链和 `protoc`。Debian/Ubuntu 可使用 `sudo apt-get install build-essential protobuf-compiler` 安装构建依赖。本项目开发环境中的 CLI 工具（例如 `protoc`）由 mise 管理。
 
 ```sh
@@ -16,8 +32,6 @@ cargo build --release --locked
 # 或安装当前工作副本：
 cargo install --path . --locked
 ```
-
-发布工作流为 Linux x86_64、macOS arm64 和 Windows x86_64 构建程序。预编译程序的使用者无需安装 Node.js 或 Rust，但仍需满足目标操作系统的运行库要求。
 
 ## 配置
 

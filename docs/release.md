@@ -11,6 +11,7 @@
 | `.github/workflows/release.yml` | 正式版入口 | `v*` 标签，排除包含 `-` 的标签 | 传入已有正式版标签，例如 `v0.1.0` |
 | `.github/workflows/prerelease.yml` | 预发布入口 | `v*-*` 标签 | 传入已有预发布标签，例如 `v0.2.0-rc.1` |
 | `.github/workflows/publish.yml` | 两个入口共用的校验、构建、摘要和上传流程 | 由入口调用 | 不直接运行 |
+| `.github/workflows/install.yml` | 安装脚本测试：三平台构建，再对着本地模拟的发布目录执行 `install.sh` / `install.ps1` | 改动安装脚本或测试脚本时 | 直接运行 |
 
 正式版标签采用 `vMAJOR.MINOR.PATCH`。预发布标签采用 `vMAJOR.MINOR.PATCH-标识符`，例如 `v0.2.0-alpha.1`、`v0.2.0-beta.1`、`v0.2.0-rc.1`。数字标识符不能包含前导零；当前自动化不接受 `+build` 元数据。
 
