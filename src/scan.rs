@@ -7,7 +7,7 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result};
 use ignore::{WalkBuilder, WalkState};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -46,6 +46,12 @@ pub enum ScanEvent {
         path: String,
         modified: String,
         size: u64,
+    },
+    /// The file could not be read this time. Unlike `Skipped`, the content may
+    /// become readable again, so an existing index entry is kept.
+    Unreadable {
+        path: String,
+        reason: String,
     },
     Skipped {
         path: String,
@@ -179,13 +185,24 @@ fn read_document(
     force: bool,
     chunker: &mut Chunker,
 ) -> Result<ScanEvent> {
-    let before =
-        std::fs::symlink_metadata(path).with_context(|| format!("read metadata for {relative}"))?;
-    ensure!(
-        before.file_type().is_file(),
-        "file changed type during scan: {relative}"
-    );
-    let stamp = modified(&before)?;
+    // A single unreadable file must not fail the whole scan. The file may be
+    // gone for good or only temporarily unreadable; either way the index keeps
+    // what it already has and the next scan retries.
+    let unreadable = |reason: String| ScanEvent::Unreadable {
+        path: relative.to_owned(),
+        reason,
+    };
+    let before = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) => return Ok(unreadable(format!("read metadata: {error}"))),
+    };
+    if !before.file_type().is_file() {
+        return Ok(unreadable("file changed type during scan".into()));
+    }
+    let stamp = match modified(&before) {
+        Ok(stamp) => stamp,
+        Err(error) => return Ok(unreadable(format!("read modification time: {error}"))),
+    };
     let unchanged = || ScanEvent::Unchanged {
         path: relative.to_owned(),
         modified: stamp.clone(),
@@ -204,13 +221,21 @@ fn read_document(
     if before.len() > MAX_FILE_BYTES as u64 {
         return Ok(skip("exceeds 1 MiB file limit".into()));
     }
-    let file = File::open(path).with_context(|| format!("read {relative}"))?;
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) => return Ok(unreadable(format!("open: {error}"))),
+    };
     let mut bytes = Vec::with_capacity(before.len() as usize);
-    file.take(MAX_FILE_BYTES as u64 + 1)
-        .read_to_end(&mut bytes)?;
-    let after = std::fs::symlink_metadata(path)?;
-    if !after.file_type().is_file() || modified(&after)? != stamp || after.len() != before.len() {
-        bail!("file changed while being read: {relative}; retry indexing");
+    if let Err(error) = file.take(MAX_FILE_BYTES as u64 + 1).read_to_end(&mut bytes) {
+        return Ok(unreadable(format!("read: {error}")));
+    }
+    let after = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) => return Ok(unreadable(format!("read metadata after read: {error}"))),
+    };
+    let still_same = modified(&after).is_ok_and(|value| value == stamp);
+    if !after.file_type().is_file() || !still_same || after.len() != before.len() {
+        return Ok(unreadable("file changed while being read".into()));
     }
     if bytes.len() > MAX_FILE_BYTES {
         return Ok(skip("exceeds 1 MiB file limit".into()));
@@ -269,5 +294,25 @@ mod tests {
         }
         task.await.unwrap();
         assert_eq!(paths, ["src/ok.rs"]);
+    }
+
+    #[test]
+    fn unreadable_files_are_reported_instead_of_failing_the_scan() {
+        let dir = tempfile::tempdir().unwrap();
+        let event = read_document(
+            &dir.path().join("gone.rs"),
+            "gone.rs",
+            None,
+            false,
+            &mut Chunker::default(),
+        )
+        .unwrap();
+        match event {
+            ScanEvent::Unreadable { path, reason } => {
+                assert_eq!(path, "gone.rs");
+                assert!(reason.starts_with("read metadata"), "{reason}");
+            }
+            other => panic!("expected Unreadable, got {other:?}"),
+        }
     }
 }

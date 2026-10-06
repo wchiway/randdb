@@ -169,6 +169,39 @@ async fn ignored_and_newly_binary_files_are_retired_without_reembedding() {
     assert_eq!(engine.index(false).await.unwrap().removed, 1);
 }
 
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unreadable_files_do_not_fail_indexing_or_search() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let provider = Provider::start();
+    let root = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("auth.rs"), "fn authenticate() {}\n").unwrap();
+    let locked = root.path().join("locked.rs");
+    std::fs::write(&locked, "fn locked() {}\n").unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::File::open(&locked).is_ok() {
+        // Running as root: permission bits are not enforced.
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
+        return;
+    }
+
+    let mut engine = Engine::open(
+        provider.config(home.path()),
+        root.path(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    let report = engine.index(false).await.unwrap();
+    assert_eq!((report.indexed, report.skipped), (1, 1));
+    let output = engine.search(&request(root.path())).await.unwrap();
+    assert!(output.contains("auth.rs"), "{output}");
+
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
+}
+
 #[test]
 fn model_identity_changes_cache_even_when_dimensions_match() {
     let provider = Provider::start();

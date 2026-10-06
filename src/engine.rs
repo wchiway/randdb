@@ -127,6 +127,13 @@ impl Engine {
                         seen.insert(path);
                         report.unchanged += 1;
                     }
+                    ScanEvent::Unreadable { path, reason } => {
+                        // Transient: keep any committed entry instead of forcing a
+                        // re-embedding later. The next scan retries this file.
+                        tracing::warn!(file=%path, %reason, "file could not be read");
+                        seen.insert(path);
+                        report.skipped += 1;
+                    }
                     ScanEvent::Skipped { path, reason } => {
                         // A previously indexed file that became binary/oversized must disappear.
                         if known.contains_key(&path) {
