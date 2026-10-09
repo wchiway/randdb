@@ -99,6 +99,7 @@ Configure your MCP client, using the executable's absolute path if needed:
 - Tree-sitter handles TypeScript/TSX, JavaScript/JSX, Python, Rust, Go, Java, C, C++, C#, and shell. Ruby, PHP, Kotlin, Swift, Lua, Markdown, JSON, and common configuration/text formats use line-based chunks.
 - UTF-8 and BOM-marked UTF-16 are accepted. Binary, invalid/unsupported-encoding, and oversized files are skipped with diagnostics. Stored offsets address the decoded UTF-8 snapshot.
 - Unchanged modification time and size avoid file reads; changed metadata triggers hashing. Use `--force` for external tools that preserve both timestamp and size while modifying content.
+- A file that cannot be read is reported and skipped; the run continues, and its previous index entry is kept until a later scan succeeds.
 - SQLite owns source snapshots, chunk locations, lexical indexes, and readiness. LanceDB stores derived vectors. Pending files are hidden; interrupted writes and deletions retry on the next scan.
 - Same-file context is bounded. There is no import expansion, call graph, watcher daemon, symbol-navigation suite, or package-manager updater.
 - A failed reranker request falls back to hybrid ordering with a warning. Embedding failures stop the operation.

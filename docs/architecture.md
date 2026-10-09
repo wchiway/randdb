@@ -31,6 +31,8 @@ Parsing and synchronous SQLite coordination run outside the asynchronous protoco
 
 A missing vector table invalidates ready markers and is recreated. Arbitrary external modification of database files is not a supported mutation API; use `index --force` or a new data directory when repairing externally damaged indexes.
 
+A file whose contents cannot be read is reported and skipped without failing the run. Its previous index entry is kept, so a transient failure does not force re-embedding; a later scan retries it.
+
 ## Retrieval
 
 Each request validates its arguments, locks the project, and completes an incremental scan. Vector and lexical candidates are merged using weighted reciprocal rank fusion. Up to 40 ready chunks enter reranking; up to eight seeds are returned. A low top score returns the best seed with a warning. Reranker failure falls back to hybrid ordering with a warning; scores are heuristic relevance signals, not correctness probabilities.
