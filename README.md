@@ -8,6 +8,22 @@ RandDB exposes one MCP tool, `codebase-retrieval`: describe the code you need an
 
 ## Install
 
+Tagged releases build executables for Linux x86_64, macOS arm64, and Windows x86_64. Prebuilt executables do not require Node.js or Rust on the destination machine; operating-system runtime requirements still apply.
+
+```sh
+# macOS, Linux, and WSL
+curl -fsSL https://raw.githubusercontent.com/wchiway/randdb/main/install.sh | sh
+
+# Windows PowerShell
+irm https://raw.githubusercontent.com/wchiway/randdb/main/install.ps1 | iex
+```
+
+The installer resolves the newest release that provides a build for your platform, verifies the download against the release's `SHA256SUMS`, installs the executable into `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows), and creates the configuration template. Pass `--version v0.1.0-alpha.1` to install a specific tag, `--dir DIR` to choose the location, or `--no-init` to skip the configuration file; the PowerShell script takes `-Version`, `-InstallDir`, and `-NoInit`. Set `RANDDB_RELEASE_BASE_URL` and `RANDDB_API_BASE_URL` to install from a mirror.
+
+The Linux build is produced on Ubuntu 24.04, so older distributions may need to build from source.
+
+### Build from source
+
 Build prerequisites: stable Rust (1.91 or newer), a C/C++ toolchain, and `protoc`. On Debian/Ubuntu, install native prerequisites with `sudo apt-get install build-essential protobuf-compiler`. This project's development environment manages CLI tools such as `protoc` with mise.
 
 ```sh
@@ -16,8 +32,6 @@ cargo build --release --locked
 # Or install this checkout:
 cargo install --path . --locked
 ```
-
-Tagged releases build executables for Linux x86_64, macOS arm64, and Windows x86_64. Prebuilt executables do not require Node.js or Rust on the destination machine; operating-system runtime requirements still apply.
 
 ## Configure
 

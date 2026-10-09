@@ -1,0 +1,107 @@
+name: RandDB installer test
+
+# Exercises install.sh and install.ps1 on every platform they support. Each job
+# builds the real binary, packages it exactly like the release pipeline does,
+# serves the result from a local HTTP server, and runs the installer against it,
+# so the test needs no published release and no network access to GitHub.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - install.sh
+      - install.ps1
+      - .github/scripts/install_test.sh
+      - .github/workflows/install.yml
+  push:
+    branches: [main]
+    paths:
+      - install.sh
+      - install.ps1
+      - .github/scripts/install_test.sh
+      - .github/workflows/install.yml
+
+permissions:
+  contents: read
+
+env:
+  CARGO_BUILD_JOBS: 2
+  CARGO_TERM_COLOR: always
+
+jobs:
+  installer:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            binary: randdb
+          - os: macos-14
+            target: aarch64-apple-darwin
+            binary: randdb
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            binary: randdb.exe
+    env:
+      TARGET: ${{ matrix.target }}
+      BINARY: ${{ matrix.binary }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: "36.2"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: install-test-${{ matrix.target }}
+      - name: Build
+        shell: bash
+        run: cargo build --release --locked --target "$TARGET"
+      - name: Read the crate version
+        shell: bash
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          echo "CRATE_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Install from a locally served release tree
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            export PATH="/usr/bin:$PATH"
+            powershell.exe -NoProfile -Command '
+              $version = & tar.exe --version
+              $version
+              if (-not ($version -match "GNU tar")) { throw "Expected Git GNU tar on PATH" }
+            '
+          fi
+          bash .github/scripts/install_test.sh \
+            --binary "target/$TARGET/release/$BINARY" \
+            --target "$TARGET" \
+            --tag v0.0.0-install-test \
+            --expect-version "$CRATE_VERSION"
+      - name: Install with Windows native tar
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          export PATH="$(cygpath -u "$SYSTEMROOT")/System32:$PATH"
+          powershell.exe -NoProfile -Command '
+            $version = & tar.exe --version
+            $version
+            if (-not ($version -match "bsdtar")) { throw "Expected Windows bsdtar on PATH" }
+          '
+          /usr/bin/bash .github/scripts/install_test.sh \
+            --binary "target/$TARGET/release/$BINARY" \
+            --target "$TARGET" \
+            --tag v0.0.0-install-test \
+            --expect-version "$CRATE_VERSION" \
+            --port 8732
