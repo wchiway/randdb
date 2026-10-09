@@ -233,8 +233,15 @@ got      $actual"
     if (-not $tar) {
         Fail "tar.exe is required to unpack the release archive; it ships with Windows 10 1803 and newer"
     }
-    & $tar.Source -xzf $archivePath -C $tempDir
-    if ($LASTEXITCODE -ne 0) { Fail "could not unpack $asset" }
+    # Git Bash can put GNU tar ahead of Windows bsdtar on PATH. GNU tar treats
+    # the colon in C:\... archive paths as a remote host, so use a relative name.
+    Push-Location -LiteralPath $tempDir
+    try {
+        & $tar.Source -xzf "./$asset"
+        if ($LASTEXITCODE -ne 0) { Fail "could not unpack $asset" }
+    } finally {
+        Pop-Location
+    }
 
     $extracted = Join-Path $tempDir "$Bin.exe"
     if (-not (Test-Path -LiteralPath $extracted)) { Fail "$asset does not contain $Bin.exe" }

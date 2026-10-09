@@ -76,8 +76,32 @@ jobs:
       - name: Install from a locally served release tree
         shell: bash
         run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            export PATH="/usr/bin:$PATH"
+            powershell.exe -NoProfile -Command '
+              $version = & tar.exe --version
+              $version
+              if (-not ($version -match "GNU tar")) { throw "Expected Git GNU tar on PATH" }
+            '
+          fi
           bash .github/scripts/install_test.sh \
             --binary "target/$TARGET/release/$BINARY" \
             --target "$TARGET" \
             --tag v0.0.0-install-test \
             --expect-version "$CRATE_VERSION"
+      - name: Install with Windows native tar
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          export PATH="$(cygpath -u "$SYSTEMROOT")/System32:$PATH"
+          powershell.exe -NoProfile -Command '
+            $version = & tar.exe --version
+            $version
+            if (-not ($version -match "bsdtar")) { throw "Expected Windows bsdtar on PATH" }
+          '
+          /usr/bin/bash .github/scripts/install_test.sh \
+            --binary "target/$TARGET/release/$BINARY" \
+            --target "$TARGET" \
+            --tag v0.0.0-install-test \
+            --expect-version "$CRATE_VERSION" \
+            --port 8732
